@@ -27,18 +27,37 @@ runs:
   steps:
     - name: 🔍 Read PR details
       id: details
-      uses: actions/github-script@v5
+      uses: actions/github-script@v6
       with:
         # We need to find the PR number that corresponds to the branch, which we do by searching the GH API
         # The workflow_run event includes a list of pull requests, but it doesn't get populated for
         # forked PRs: https://docs.github.com/en/rest/reference/checks#create-a-check-run
         script: |
           const [owner, repo] = "${{ github.repository }}".split("/");
-          const response = await github.rest.pulls.list({
-            head: "${{ inputs.owner }}:${{ inputs.branch }}",
-            owner,
-            repo,
-          });
-          const [pr] = response.data;
+          const head = "${{ inputs.owner }}:${{ inputs.branch }}";
+
+          // first try: query API using the head param
+          const response = await github.rest.pulls.list({ head, owner, repo });
+          let [pr] = response.data;
+          if (pr) return pr;
+
+          // For some reason GitHub does not always find the PRs querying with the head param:
+          // Fetch all PRs and search for the head.
+          await github.paginate(
+            "GET /repos/{owner}/{repo}/pulls",
+            {
+              owner,
+              repo,
+            sort: "updated",
+            },
+            (response, done) => {
+              const paginatedPR = response.data.find(pr => pr.head?.label === head);
+              if (paginatedPR) {
+                pr = paginatedPR;
+                done();
+              }
+            }
+          );
+
           if (pr) return pr;
           core.setFailed("Pull Request not found!");
