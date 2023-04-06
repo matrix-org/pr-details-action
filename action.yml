@@ -30,13 +30,21 @@ runs:
       uses: actions/github-script@v6
       env:
         head: ${{ format('{0}:{1}', inputs.owner, inputs.branch) }}
+        branch: ${{ inputs.branch }}
       with:
         # We need to find the PR number that corresponds to the branch, which we do by searching the GH API
         # The workflow_run event includes a list of pull requests, but it doesn't get populated for
         # forked PRs: https://docs.github.com/en/rest/reference/checks#create-a-check-run
         script: |
           const { owner, repo } = context.repo;
-          const { head } = process.env;
+          const { head, branch } = process.env;
+          
+          // Check if the branch is a merge queue, those encode the PR number
+          const res = branch.match(/gh-readonly-queue\/.+\/pr-(\d+)-\w+/);
+          if (res) {
+              const response = await github.rest.pulls.get({ owner, repo, pull_number: parseInt(res[1], 10) });
+              return response.data;
+          }
 
           // first try: query API using the head param
           const response = await github.rest.pulls.list({ head, owner, repo });
