@@ -27,7 +27,7 @@ runs:
   steps:
     - name: 🔍 Read PR details
       id: details
-      uses: actions/github-script@v6
+      uses: actions/github-script@v9
       env:
         head: ${{ format('{0}:{1}', inputs.owner, inputs.branch) }}
         branch: ${{ inputs.branch }}
